@@ -1,4 +1,3 @@
-
 services:
   db:
     image: postgres:15
@@ -7,18 +6,16 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: app_db
     ports:
-      - "5432:5432"
+      - '5432:5432'
 
   web:
     build: .
-    command: bash -c "./wait-for-it.sh db:5432 -- uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8000:8000"
+      - '8000:8000'
     depends_on:
       - db
     env_file:
       - .env
     volumes:
       - .:/code
-      - ./wait-for-it.sh:/code/wait-for-it.sh
-

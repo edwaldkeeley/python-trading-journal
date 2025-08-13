@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 import asyncio
-from typing import Optional, AsyncIterator
+import logging
+from typing import AsyncIterator, Optional
 
 import asyncpg
 
