@@ -18,3 +18,4 @@ def get_connection_dependency() -> Depends[asyncpg.Connection]:
     """Convenience function to get database connection dependency."""
     return Depends(get_db_connection)
 
+
