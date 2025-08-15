@@ -30,4 +30,3 @@ CREATE TRIGGER trg_set_updated_at
 BEFORE UPDATE ON trades
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
-

@@ -6,12 +6,12 @@ from typing import Optional, Sequence
 import asyncpg
 
 from app.domains.trade import repository
-from app.domains.trade.models import Trade, TradeCreate, TradeUpdate, TradeSide
+from app.domains.trade.models import Trade, TradeCreate, TradeUpdate
 
 
 def _compute_pnl(
     *,
-    side: TradeSide,
+    side: str,
     quantity: Decimal,
     entry_price: Decimal,
     exit_price: Optional[Decimal],
@@ -19,7 +19,7 @@ def _compute_pnl(
 ) -> Optional[Decimal]:
     if exit_price is None:
         return None
-    if side == TradeSide.BUY:
+    if side == "buy":
         gross = (exit_price - entry_price) * quantity
     else:
         gross = (entry_price - exit_price) * quantity
@@ -28,7 +28,7 @@ def _compute_pnl(
 
 async def create_trade(conn: asyncpg.Connection, trade_in: TradeCreate) -> Trade:
     pnl = _compute_pnl(
-        side=trade_in.side,
+        side=trade_in.side.value,
         quantity=trade_in.quantity,
         entry_price=trade_in.entry_price,
         exit_price=trade_in.exit_price,
@@ -69,7 +69,7 @@ async def update_trade(
     fees_eff = trade_in.fees if trade_in.fees is not None else existing.fees
 
     pnl = _compute_pnl(
-        side=side_eff,
+        side=side_eff.value if side_eff else existing.side.value,
         quantity=quantity_eff,
         entry_price=entry_price_eff,
         exit_price=exit_price_eff,

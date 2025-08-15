@@ -232,4 +232,3 @@ async def delete(conn: asyncpg.Connection, trade_id: int) -> bool:
     """Delete a trade (legacy function)."""
     repo = TradeRepository(conn)
     return await repo.delete(trade_id)
-
