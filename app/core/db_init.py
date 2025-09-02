@@ -16,6 +16,10 @@ class DatabaseInitializer:
         self.migrations_dir = Path(__file__).resolve().parent.parent / "migrations"
         self.migration_files = [
             "001_create_trade.sql",
+                    "002_add_stop_loss_take_profit.sql",
+        "003_add_exit_reason.sql",
+        "004_add_checklist_fields.sql",
+        "005_add_lot_size.sql",
         ]
 
     async def run_migrations(self) -> None:

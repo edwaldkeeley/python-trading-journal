@@ -52,6 +52,15 @@ async def list_trades(
     return await repository.list(conn, symbol=symbol_norm, limit=limit, offset=offset)
 
 
+async def count_trades(
+    conn: asyncpg.Connection,
+    *,
+    symbol: Optional[str],
+) -> int:
+    symbol_norm = symbol.upper() if symbol else None
+    return await repository.count(conn, symbol=symbol_norm)
+
+
 async def update_trade(
     conn: asyncpg.Connection,
     trade_id: int,

@@ -26,10 +26,15 @@ class TradeBase(BaseModel):
     )
     side: TradeSide = Field(..., description="Trade side (buy/sell)")
     quantity: Decimal = Field(..., gt=0, description="Trade quantity")
+    lot_size: Decimal = Field(default=1, gt=0, description="Lot size multiplier (e.g., 100 for standard lots)")
     entry_price: Decimal = Field(..., gt=0, description="Entry price")
     entry_time: datetime = Field(..., description="Entry timestamp")
+    stop_loss: Decimal = Field(..., gt=0, description="Stop loss price for risk management")
+    take_profit: Decimal = Field(..., gt=0, description="Take profit target price")
     fees: Decimal = Field(default=0, ge=0, description="Trading fees")
     notes: Optional[str] = Field(None, max_length=2000, description="Trade notes")
+    checklist_grade: Optional[str] = Field(None, max_length=3, description="Trade quality grade (A+, A, B+, B, C+, C, D+, D, F)")
+    checklist_score: Optional[int] = Field(None, ge=0, le=100, description="Trade quality score (0-100)")
 
     @field_validator("symbol")
     @classmethod
@@ -37,7 +42,7 @@ class TradeBase(BaseModel):
         """Normalize symbol to uppercase."""
         return v.upper().strip()
 
-    @field_validator("quantity", "entry_price", "fees")
+    @field_validator("quantity", "lot_size", "entry_price", "stop_loss", "take_profit", "fees")
     @classmethod
     def validate_decimal(cls, v: float | Decimal) -> Decimal:
         """Convert float to Decimal and validate."""
@@ -69,12 +74,18 @@ class TradeUpdate(BaseModel):
     symbol: Optional[str] = Field(None, min_length=1, max_length=20)
     side: Optional[TradeSide] = None
     quantity: Optional[Decimal] = Field(None, gt=0)
+    lot_size: Optional[Decimal] = Field(None, gt=0)
     entry_price: Optional[Decimal] = Field(None, gt=0)
     entry_time: Optional[datetime] = None
+    stop_loss: Optional[Decimal] = Field(None, gt=0)
+    take_profit: Optional[Decimal] = Field(None, gt=0)
     exit_price: Optional[Decimal] = Field(None, gt=0)
     exit_time: Optional[datetime] = None
+    exit_reason: Optional[str] = Field(None, description="Reason for trade exit (manual, take_profit, stop_loss)")
     fees: Optional[Decimal] = Field(None, ge=0)
     notes: Optional[str] = Field(None, max_length=2000)
+    checklist_grade: Optional[str] = Field(None, max_length=3, description="Trade quality grade (A+, A, B+, B, C+, C, D+, D, F)")
+    checklist_score: Optional[int] = Field(None, ge=0, le=100, description="Trade quality score (0-100)")
 
     @field_validator("symbol")
     @classmethod
@@ -103,6 +114,7 @@ class Trade(TradeBase):
     updated_at: datetime = Field(..., description="Last update timestamp")
     exit_price: Optional[Decimal] = None
     exit_time: Optional[datetime] = None
+    exit_reason: Optional[str] = Field(None, description="Reason for trade exit (manual, take_profit, stop_loss)")
     pnl: Optional[Decimal] = Field(None, description="Profit/Loss")
 
     @computed_field

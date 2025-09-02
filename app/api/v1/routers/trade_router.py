@@ -33,15 +33,28 @@ async def get_trade(
   return trade
 
 
-@router.get("/", response_model=List[Trade])
+@router.get("/", response_model=dict)
 async def list_trades(
   symbol: Optional[str] = None,
   limit: int = Query(50, ge=1, le=500),
   offset: int = Query(0, ge=0),
   conn: asyncpg.Connection = get_connection_dependency(),
-) -> list[Trade]:
+) -> dict:
   trades = await trade_service.list_trades(conn, symbol=symbol, limit=limit, offset=offset)
-  return trades
+  total_count = await trade_service.count_trades(conn, symbol=symbol)
+
+  return {
+    "trades": trades,
+    "pagination": {
+      "total": total_count,
+      "limit": limit,
+      "offset": offset,
+      "page": (offset // limit) + 1,
+      "total_pages": (total_count + limit - 1) // limit,
+      "has_next": offset + limit < total_count,
+      "has_prev": offset > 0
+    }
+  }
 
 
 @router.put("/{trade_id}", response_model=Trade)

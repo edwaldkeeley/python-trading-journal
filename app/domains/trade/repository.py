@@ -17,7 +17,7 @@ def _record_to_trade(record: asyncpg.Record) -> Trade:
     """Convert database record to Trade model."""
     data = dict(record)
     # Convert Decimal fields back to Decimal for Pydantic
-    for field in ["quantity", "entry_price", "exit_price", "fees", "pnl"]:
+    for field in ["quantity", "lot_size", "entry_price", "exit_price", "stop_loss", "take_profit", "fees", "pnl"]:
         if field in data and data[field] is not None:
             data[field] = Decimal(str(data[field]))
     return Trade(**data)
@@ -33,11 +33,13 @@ class TradeRepository:
         """Create a new trade."""
         sql = """
             INSERT INTO trades (
-                symbol, side, quantity, entry_price, entry_time,
-                exit_price, exit_time, fees, notes, pnl
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING id, symbol, side, quantity, entry_price, entry_time,
-                      exit_price, exit_time, fees, notes, pnl, created_at, updated_at
+                symbol, side, quantity, lot_size, entry_price, entry_time,
+                stop_loss, take_profit, exit_price, exit_time, exit_reason, fees, notes, pnl,
+                checklist_grade, checklist_score
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+            RETURNING id, symbol, side, quantity, lot_size, entry_price, entry_time,
+                      stop_loss, take_profit, exit_price, exit_time, exit_reason, fees, notes, pnl,
+                      checklist_grade, checklist_score, created_at, updated_at
         """
 
         row = await self.conn.fetchrow(
@@ -45,13 +47,19 @@ class TradeRepository:
             trade_in.symbol,
             trade_in.side.value,
             float(trade_in.quantity),
+            float(trade_in.lot_size),
             float(trade_in.entry_price),
             trade_in.entry_time,
+            float(trade_in.stop_loss) if trade_in.stop_loss else None,
+            float(trade_in.take_profit) if trade_in.take_profit else None,
             float(trade_in.exit_price) if trade_in.exit_price else None,
             trade_in.exit_time,
+            None,  # exit_reason (not set on creation)
             float(trade_in.fees),
             trade_in.notes,
             float(pnl) if pnl else None,
+            trade_in.checklist_grade,
+            trade_in.checklist_score,
         )
 
         if not row:
@@ -62,8 +70,9 @@ class TradeRepository:
     async def get_by_id(self, trade_id: int) -> Optional[Trade]:
         """Get trade by ID."""
         sql = """
-            SELECT id, symbol, side, quantity, entry_price, entry_time,
-                   exit_price, exit_time, fees, notes, pnl, created_at, updated_at
+            SELECT id, symbol, side, quantity, lot_size, entry_price, entry_time,
+                   stop_loss, take_profit, exit_price, exit_time, exit_reason, fees, notes, pnl,
+                   checklist_grade, checklist_score, created_at, updated_at
             FROM trades WHERE id = $1
         """
 
@@ -81,10 +90,10 @@ class TradeRepository:
         """List trades with optional filtering."""
         # Build base query
         query = Query.from_(trades).select(
-            trades.id, trades.symbol, trades.side, trades.quantity,
-            trades.entry_price, trades.entry_time, trades.exit_price,
-            trades.exit_time, trades.fees, trades.notes, trades.pnl,
-            trades.created_at, trades.updated_at
+            trades.id, trades.symbol, trades.side, trades.quantity, trades.lot_size,
+            trades.entry_price, trades.entry_time, trades.stop_loss, trades.take_profit,
+            trades.exit_price, trades.exit_time, trades.exit_reason, trades.fees, trades.notes, trades.pnl,
+            trades.checklist_grade, trades.checklist_score, trades.created_at, trades.updated_at
         )
 
         # Apply filters
@@ -118,6 +127,42 @@ class TradeRepository:
         rows = await self.conn.fetch(sql, *params)
         return [_record_to_trade(row) for row in rows]
 
+    async def count(
+        self,
+        *,
+        symbol: Optional[str] = None,
+        side: Optional[str] = None,
+    ) -> int:
+        """Get total count of trades with optional filtering."""
+        # Build base query
+        query = Query.from_(trades).select(trades.id)
+
+        # Apply filters
+        params = []
+        param_count = 1
+
+        if symbol:
+            query = query.where(trades.symbol == f"${param_count}")
+            params.append(symbol.upper())
+            param_count += 1
+
+        if side:
+            query = query.where(trades.side == f"${param_count}")
+            params.append(side)
+            param_count += 1
+
+        sql = str(query)
+
+        # Replace PyPika placeholders with PostgreSQL placeholders
+        for i in range(len(params)):
+            sql = sql.replace(f"${i+1}", f"${i+1}")
+
+        # Add count wrapper
+        sql = f"SELECT COUNT(*) FROM ({sql}) as count_query"
+
+        row = await self.conn.fetchrow(sql, *params)
+        return row[0] if row else 0
+
     async def update(
         self,
         trade_id: int,
@@ -140,12 +185,18 @@ class TradeRepository:
             "symbol": "symbol",
             "side": "side",
             "quantity": "quantity",
+            "lot_size": "lot_size",
             "entry_price": "entry_price",
             "entry_time": "entry_time",
+            "stop_loss": "stop_loss",
+            "take_profit": "take_profit",
             "exit_price": "exit_price",
             "exit_time": "exit_time",
+            "exit_reason": "exit_reason",
             "fees": "fees",
             "notes": "notes",
+            "checklist_grade": "checklist_grade",
+            "checklist_score": "checklist_score",
         }
 
         for field, column in field_mapping.items():
@@ -153,7 +204,7 @@ class TradeRepository:
                 value = getattr(trade_in, field)
                 if field == "side":
                     value = value.value
-                elif field in ["quantity", "entry_price", "exit_price", "fees"]:
+                elif field in ["quantity", "lot_size", "entry_price", "stop_loss", "take_profit", "exit_price", "fees"]:
                     value = float(value)
 
                 update_fields.append(f"{column} = ${param_count}")
@@ -175,8 +226,9 @@ class TradeRepository:
             UPDATE trades
             SET {', '.join(update_fields)}
             WHERE id = ${param_count}
-            RETURNING id, symbol, side, quantity, entry_price, entry_time,
-                      exit_price, exit_time, fees, notes, pnl, created_at, updated_at
+            RETURNING id, symbol, side, quantity, lot_size, entry_price, entry_time,
+                      stop_loss, take_profit, exit_price, exit_time, exit_reason, fees, notes, pnl,
+                      checklist_grade, checklist_score, created_at, updated_at
         """
         params.append(trade_id)
 
@@ -215,6 +267,17 @@ async def list(
     """List trades (legacy function)."""
     repo = TradeRepository(conn)
     return await repo.list(symbol=symbol, limit=limit, offset=offset)
+
+
+async def count(
+    conn: asyncpg.Connection,
+    *,
+    symbol: Optional[str] = None,
+    side: Optional[str] = None,
+) -> int:
+    """Get total count of trades (legacy function)."""
+    repo = TradeRepository(conn)
+    return await repo.count(symbol=symbol, side=side)
 
 
 async def update(
