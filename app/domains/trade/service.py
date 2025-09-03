@@ -13,6 +13,7 @@ def _compute_pnl(
     *,
     side: str,
     quantity: Decimal,
+    lot_size: Decimal,
     entry_price: Decimal,
     exit_price: Optional[Decimal],
     fees: Decimal,
@@ -20,9 +21,9 @@ def _compute_pnl(
     if exit_price is None:
         return None
     if side == "buy":
-        gross = (exit_price - entry_price) * quantity
+        gross = (exit_price - entry_price) * quantity * lot_size
     else:
-        gross = (entry_price - exit_price) * quantity
+        gross = (entry_price - exit_price) * quantity * lot_size
     return gross - fees
 
 
@@ -30,6 +31,7 @@ async def create_trade(conn: asyncpg.Connection, trade_in: TradeCreate) -> Trade
     pnl = _compute_pnl(
         side=trade_in.side.value,
         quantity=trade_in.quantity,
+        lot_size=trade_in.lot_size,
         entry_price=trade_in.entry_price,
         exit_price=trade_in.exit_price,
         fees=trade_in.fees,
@@ -74,16 +76,22 @@ async def update_trade(
     side_eff = trade_in.side or existing.side
     entry_price_eff = trade_in.entry_price if trade_in.entry_price is not None else existing.entry_price
     quantity_eff = trade_in.quantity if trade_in.quantity is not None else existing.quantity
+    lot_size_eff = trade_in.lot_size if trade_in.lot_size is not None else existing.lot_size
     exit_price_eff = trade_in.exit_price if trade_in.exit_price is not None else existing.exit_price
     fees_eff = trade_in.fees if trade_in.fees is not None else existing.fees
 
-    pnl = _compute_pnl(
-        side=side_eff.value if side_eff else existing.side.value,
-        quantity=quantity_eff,
-        entry_price=entry_price_eff,
-        exit_price=exit_price_eff,
-        fees=fees_eff,
-    )
+    # Use the P&L provided by the frontend if available, otherwise calculate it
+    if trade_in.pnl is not None:
+        pnl = trade_in.pnl
+    else:
+        pnl = _compute_pnl(
+            side=side_eff.value if side_eff else existing.side.value,
+            quantity=quantity_eff,
+            lot_size=lot_size_eff,
+            entry_price=entry_price_eff,
+            exit_price=exit_price_eff,
+            fees=fees_eff,
+        )
 
     return await repository.update(conn, trade_id, trade_in, pnl)
 

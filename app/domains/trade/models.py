@@ -84,6 +84,7 @@ class TradeUpdate(BaseModel):
     exit_reason: Optional[str] = Field(None, description="Reason for trade exit (manual, take_profit, stop_loss)")
     fees: Optional[Decimal] = Field(None, ge=0)
     notes: Optional[str] = Field(None, max_length=2000)
+    pnl: Optional[Decimal] = Field(None, description="Profit/Loss")
     checklist_grade: Optional[str] = Field(None, max_length=3, description="Trade quality grade (A+, A, B+, B, C+, C, D+, D, F)")
     checklist_score: Optional[int] = Field(None, ge=0, le=100, description="Trade quality score (0-100)")
 
@@ -94,6 +95,20 @@ class TradeUpdate(BaseModel):
         if v is None:
             return None
         return v.upper().strip()
+
+    @field_validator("lot_size")
+    @classmethod
+    def validate_lot_size(cls, v: Optional[float | Decimal]) -> Optional[Decimal]:
+        """Validate lot size is within reasonable limits."""
+        if v is None:
+            return None
+        if isinstance(v, float):
+            v = Decimal(str(v))
+        if v <= 0:
+            raise ValueError("Lot size must be greater than 0")
+        if v > 100:
+            raise ValueError("Lot size cannot exceed 100")
+        return v
 
     @field_validator("quantity", "entry_price", "exit_price", "fees")
     @classmethod

@@ -195,6 +195,7 @@ class TradeRepository:
             "exit_reason": "exit_reason",
             "fees": "fees",
             "notes": "notes",
+            "pnl": "pnl",
             "checklist_grade": "checklist_grade",
             "checklist_score": "checklist_score",
         }
@@ -204,18 +205,14 @@ class TradeRepository:
                 value = getattr(trade_in, field)
                 if field == "side":
                     value = value.value
-                elif field in ["quantity", "lot_size", "entry_price", "stop_loss", "take_profit", "exit_price", "fees"]:
+                elif field in ["quantity", "lot_size", "entry_price", "stop_loss", "take_profit", "exit_price", "fees", "pnl"]:
                     value = float(value)
 
                 update_fields.append(f"{column} = ${param_count}")
                 params.append(value)
                 param_count += 1
 
-        # Always update PnL and updated_at
-        update_fields.append(f"pnl = ${param_count}")
-        params.append(float(pnl) if pnl else None)
-        param_count += 1
-
+        # Always update updated_at
         update_fields.append("updated_at = NOW()")
 
         if not update_fields:
