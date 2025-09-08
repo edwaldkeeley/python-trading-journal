@@ -5,8 +5,10 @@ from typing import Optional, Sequence
 
 import asyncpg
 
-from app.domains.trade import repository
+from app.domains.trade.repository import TradeRepository
 from app.domains.trade.models import Trade, TradeCreate, TradeUpdate
+from app.core.exceptions import TradeException, DatabaseException, ValidationException
+from app.core.error_handlers import validate_trade_data
 
 
 def _compute_pnl(
@@ -28,19 +30,55 @@ def _compute_pnl(
 
 
 async def create_trade(conn: asyncpg.Connection, trade_in: TradeCreate) -> Trade:
-    pnl = _compute_pnl(
-        side=trade_in.side.value,
-        quantity=trade_in.quantity,
-        lot_size=trade_in.lot_size,
-        entry_price=trade_in.entry_price,
-        exit_price=trade_in.exit_price,
-        fees=trade_in.fees,
-    )
-    return await repository.create(conn, trade_in, pnl)
+    """Create a new trade with validation and error handling."""
+    try:
+        # Validate trade data
+        trade_data = trade_in.model_dump()
+        validate_trade_data(trade_data)
+
+        pnl = _compute_pnl(
+            side=trade_in.side.value,
+            quantity=trade_in.quantity,
+            lot_size=trade_in.lot_size,
+            entry_price=trade_in.entry_price,
+            exit_price=trade_in.exit_price,
+            fees=trade_in.fees,
+        )
+
+        repo = TradeRepository(conn)
+        trade = await repo.create(trade_in, pnl)
+        return trade
+
+    except ValidationException:
+        raise  # Re-raise validation errors
+    except Exception as e:
+        raise TradeException(
+            message=f"Failed to create trade: {str(e)}",
+            details={"operation": "create_trade", "error": str(e)}
+        )
 
 
 async def get_trade(conn: asyncpg.Connection, trade_id: int) -> Optional[Trade]:
-    return await repository.get_by_id(conn, trade_id)
+    """Get a trade by ID with error handling."""
+    try:
+        if trade_id <= 0:
+            raise ValidationException(
+                message="Trade ID must be a positive integer",
+                field="trade_id"
+            )
+
+        repo = TradeRepository(conn)
+        trade = await repo.get_by_id(trade_id)
+        return trade
+
+    except ValidationException:
+        raise  # Re-raise validation errors
+    except Exception as e:
+        raise TradeException(
+            message=f"Failed to retrieve trade: {str(e)}",
+            trade_id=trade_id,
+            details={"operation": "get_trade", "error": str(e)}
+        )
 
 
 async def list_trades(
@@ -51,7 +89,8 @@ async def list_trades(
     offset: int,
 ) -> Sequence[Trade]:
     symbol_norm = symbol.upper() if symbol else None
-    return await repository.list(conn, symbol=symbol_norm, limit=limit, offset=offset)
+    repo = TradeRepository(conn)
+    return await repo.list(symbol=symbol_norm, limit=limit, offset=offset)
 
 
 async def count_trades(
@@ -60,7 +99,8 @@ async def count_trades(
     symbol: Optional[str],
 ) -> int:
     symbol_norm = symbol.upper() if symbol else None
-    return await repository.count(conn, symbol=symbol_norm)
+    repo = TradeRepository(conn)
+    return await repo.count(symbol=symbol_norm)
 
 
 async def update_trade(
@@ -69,7 +109,8 @@ async def update_trade(
     trade_in: TradeUpdate,
 ) -> Optional[Trade]:
     # We need existing trade to fill missing fields for pnl calc
-    existing = await repository.get_by_id(conn, trade_id)
+    repo = TradeRepository(conn)
+    existing = await repo.get_by_id(trade_id)
     if existing is None:
         return None
 
@@ -93,9 +134,10 @@ async def update_trade(
             fees=fees_eff,
         )
 
-    return await repository.update(conn, trade_id, trade_in, pnl)
+    return await repo.update(trade_id, trade_in, pnl)
 
 
 async def delete_trade(conn: asyncpg.Connection, trade_id: int) -> bool:
-    return await repository.delete(conn, trade_id)
+    repo = TradeRepository(conn)
+    return await repo.delete(trade_id)
 

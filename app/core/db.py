@@ -22,21 +22,30 @@ async def init_db_pool(database_url: str, max_retries: int = 5, retry_delay: flo
   """
   global _pool
   if _pool is not None:
+    logger.info("🔄 Database pool already exists, skipping initialization")
     return
+
+  logger.info(f"🔗 Initializing database connection pool...")
+  logger.info(f"   URL: {database_url}")
+  logger.info(f"   Max retries: {max_retries}")
+  logger.info(f"   Retry delay: {retry_delay}s")
 
   for attempt in range(max_retries):
     try:
-      logger.info(f"Attempting to create database pool (attempt {attempt + 1}/{max_retries})...")
+      logger.info(f"🔄 Attempting to create database pool (attempt {attempt + 1}/{max_retries})...")
       _pool = await asyncpg.create_pool(dsn=database_url, min_size=1, max_size=10)
-      logger.info("Database pool created successfully")
+      logger.info("✅ Database pool created successfully")
+      logger.info(f"   Pool size: min=1, max=10")
       return
     except Exception as e:
-      logger.warning(f"Failed to create database pool (attempt {attempt + 1}/{max_retries}): {e}")
+      logger.warning(f"⚠️ Failed to create database pool (attempt {attempt + 1}/{max_retries}): {e}")
+      logger.warning(f"   Error type: {type(e)}")
       if attempt < max_retries - 1:
-        logger.info(f"Retrying in {retry_delay} seconds...")
+        logger.info(f"⏳ Retrying in {retry_delay} seconds...")
         await asyncio.sleep(retry_delay)
       else:
-        logger.error("Failed to create database pool after all retries")
+        logger.error("❌ Failed to create database pool after all retries")
+        logger.error(f"   Final error: {e}")
         raise
 
 

@@ -76,7 +76,83 @@ class Settings(BaseSettings):
             raise ValueError(f"Invalid log level. Must be one of: {', '.join(valid_levels)}")
         return v.upper()
 
+    @field_validator("run_migrations_on_startup")
+    @classmethod
+    def validate_run_migrations(cls, v: bool) -> bool:
+        """Validate run migrations setting."""
+        return bool(v)
+
 
 # Global settings instance
 settings = Settings()
+
+
+def print_config_summary() -> None:
+    """Print a summary of current configuration for debugging."""
+    import os
+
+    print("=== Configuration Summary ===")
+    print(f"Environment file (.env) exists: {os.path.exists('.env')}")
+    print(f"Current working directory: {os.getcwd()}")
+    print()
+    print("Database Configuration:")
+    print(f"  Host: {settings.database.host}")
+    print(f"  Port: {settings.database.port}")
+    print(f"  Name: {settings.database.name}")
+    print(f"  User: {settings.database.user}")
+    print(f"  Password: {'*' * len(settings.database.password)}")
+    print(f"  URL: {settings.effective_database_url}")
+    print()
+    print("API Configuration:")
+    print(f"  Title: {settings.api.title}")
+    print(f"  Version: {settings.api.version}")
+    print(f"  Prefix: {settings.api.prefix}")
+    print(f"  Debug: {settings.api.debug}")
+    print()
+    print("Application Configuration:")
+    print(f"  Log Level: {settings.log_level}")
+    print(f"  Run Migrations: {settings.run_migrations_on_startup}")
+    print("=============================")
+
+
+def debug_env_variables() -> None:
+    """Debug function to show all relevant environment variables."""
+    import os
+
+    print("=== Environment Variables Debug ===")
+    env_vars = [
+        'DATABASE__HOST', 'DATABASE__PORT', 'DATABASE__NAME',
+        'DATABASE__USER', 'DATABASE__PASSWORD', 'DATABASE_URL',
+        'API__TITLE', 'API__VERSION', 'API__PREFIX', 'API__DEBUG',
+        'LOG_LEVEL', 'RUN_MIGRATIONS_ON_STARTUP'
+    ]
+
+    for var in env_vars:
+        value = os.getenv(var, 'NOT SET')
+        if 'PASSWORD' in var and value != 'NOT SET':
+            value = '*' * len(value)
+        print(f"{var}: {value}")
+
+    print("\n=== .env File Contents ===")
+    if os.path.exists('.env'):
+        with open('.env', 'r') as f:
+            content = f.read()
+            # Mask passwords in output
+            lines = content.split('\n')
+            for line in lines:
+                if 'PASSWORD' in line and '=' in line:
+                    key, value = line.split('=', 1)
+                    print(f"{key}=***")
+                else:
+                    print(line)
+    else:
+        print(".env file not found!")
+    print("================================")
+
+
+if __name__ == "__main__":
+    # Allow running this file directly to test configuration
+    print_config_summary()
+    print()
+    debug_env_variables()
 
