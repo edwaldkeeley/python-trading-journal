@@ -103,6 +103,18 @@ async def count_trades(
     return await repo.count(symbol=symbol_norm)
 
 
+async def clear_all_trades(conn: asyncpg.Connection) -> None:
+    """Clear all trades from the database."""
+    try:
+        repo = TradeRepository(conn)
+        await repo.clear_all()
+    except Exception as e:
+        raise TradeException(
+            message=f"Failed to clear all trades: {str(e)}",
+            details={"operation": "clear_all_trades", "error": str(e)}
+        )
+
+
 async def update_trade(
     conn: asyncpg.Connection,
     trade_id: int,

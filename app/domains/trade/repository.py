@@ -240,3 +240,8 @@ class TradeRepository:
         )
         return result.endswith(" 1")
 
+    async def clear_all(self) -> None:
+        """Clear all trades from the database."""
+        sql = "DELETE FROM trades"
+        await self.conn.execute(sql)
+

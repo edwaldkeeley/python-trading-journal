@@ -57,6 +57,15 @@ async def list_trades(
   }
 
 
+@router.delete("/clear")
+async def clear_all_trades(
+  conn: asyncpg.Connection = Depends(get_db_connection),
+) -> dict:
+  """Clear all trades from the database."""
+  await trade_service.clear_all_trades(conn)
+  return {"message": "All trades have been cleared successfully"}
+
+
 @router.put("/{trade_id}", response_model=Trade)
 async def update_trade(
   trade_id: int,
