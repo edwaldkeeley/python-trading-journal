@@ -18,8 +18,8 @@ COPY app/ ./app/
 RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app
 USER app
 
-EXPOSE 8000
+EXPOSE 8080
 
 # Default command (can be overridden in docker-compose)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
 
